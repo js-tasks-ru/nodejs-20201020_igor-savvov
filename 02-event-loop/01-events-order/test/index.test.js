@@ -19,7 +19,7 @@ describe('event-loop/events-order', () => {
           }
       ).replace(/\r\n|\r|\n/g, EOL);
 
-      const output = execSync(`node "${path.join(__dirname, '../index.js')"}`, {
+      const output = execSync(`node "${path.join(__dirname, '../index.js')}"`, {
         encoding: 'utf-8',
       }).replace(/\r\n|\r|\n/g, EOL);
 
