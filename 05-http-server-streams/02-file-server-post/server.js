@@ -7,15 +7,18 @@ const LimitSizeStream = require('./LimitSizeStream');
 const FILE_LIMIT = 1024 * 1024; // Equal to 1 MB (1048576 bytes)
 const server = new http.Server();
 
+if (!fs.existsSync('./files')) {
+  fs.mkdirSync('./files');
+}
 server.on('request', (req, res) => {
-  if (!fs.existsSync('./files')) {
-    fs.mkdirSync('./files');
-  }
   const pathname = url.parse(req.url).pathname.slice(1);
 
   const filepath = path.join(__dirname, 'files', pathname);
 
+  let isError = false;
+
   const errorStatus = (error) => {
+    isError = true;
     if (error && error.code === 'ENOENT') {
       res.statusCode = 404;
       res.end('File not found');
@@ -25,15 +28,11 @@ server.on('request', (req, res) => {
   };
 
   const errorHandler = (error) => {
-    // console.log(error);
+    isError = true;
     switch (error.code) {
       case 'EEXIST':
         res.statusCode = 409;
         res.end('Conflict - file exists');
-        break;
-
-      case 'ECONNRESET':
-        fs.unlink(filepath, errorStatus);
         break;
 
       case 'LIMIT_EXCEEDED':
@@ -60,8 +59,10 @@ server.on('request', (req, res) => {
       limitStream.on('error', errorHandler);
       writeStream.on('error', errorHandler);
       req.on('error', errorHandler);
+      req.on('aborted', () => fs.unlink(filepath, errorStatus));
       req.pipe(limitStream).pipe(writeStream);
       writeStream.on('close', () => {
+        if (isError) return;
         res.statusCode = 201;
         res.end('File created');
       });

@@ -12,13 +12,13 @@ server.on('request', (req, res) => {
 
   switch (req.method) {
     case 'GET':
+      // Nested route
+      if (~pathname.indexOf('/')) {
+        res.statusCode = 400;
+        res.end('Bad request');
+        return;
+      }
       fs.createReadStream(filepath).on('error', (error) => {
-        // Nested route
-        if (~pathname.indexOf('/')) {
-          res.statusCode = 400;
-          res.end('Bad request');
-          return;
-        }
         // No such file or directory
         if (error.code === 'ENOENT') {
           res.statusCode = 404;
