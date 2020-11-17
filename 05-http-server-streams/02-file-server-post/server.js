@@ -15,56 +15,38 @@ server.on('request', (req, res) => {
 
   const filepath = path.join(__dirname, 'files', pathname);
 
-  let isError = false;
-
-  const errorStatus = (error) => {
-    isError = true;
-    if (error && error.code === 'ENOENT') {
-      res.statusCode = 404;
-      res.end('File not found');
-      return;
-    }
-    res.end('File was deleted');
-  };
-
-  const errorHandler = (error) => {
-    isError = true;
-    switch (error.code) {
-      case 'EEXIST':
-        res.statusCode = 409;
-        res.end('Conflict - file exists');
-        break;
-
-      case 'LIMIT_EXCEEDED':
-        fs.unlink(filepath, errorStatus);
-        res.statusCode = 413;
-        res.end(`File exceede ${FILE_LIMIT} bytes limit`);
-        break;
-
-      default:
-        fs.unlink(filepath, errorStatus);
-        res.statusCode = 500;
-        res.end('Something went wrong');
-    }
-  };
   switch (req.method) {
     case 'POST':
       if (~pathname.indexOf('/')) {
         res.statusCode = 400;
-        res.end('Bad request');
-        return;
+        return res.end('Bad request');
       }
       const limitStream = new LimitSizeStream({limit: FILE_LIMIT});
       const writeStream = fs.createWriteStream(filepath, {flags: 'wx'});
-      limitStream.on('error', errorHandler);
-      writeStream.on('error', errorHandler);
-      req.on('error', errorHandler);
-      req.on('aborted', () => fs.unlink(filepath, errorStatus));
       req.pipe(limitStream).pipe(writeStream);
+
+      writeStream.on('error', (err) => {
+        if (err.code === 'EEXIST') {
+          res.statusCode = 409;
+          res.end('Conflict - file exists');
+        } else {
+          res.statusCode = 500;
+          res.end('Something went wrong');
+        }
+      });
       writeStream.on('close', () => {
-        if (isError) return;
         res.statusCode = 201;
         res.end('File created');
+      });
+      limitStream.on('error', () => {
+        res.statusCode = 413;
+        res.end(`File exceede ${FILE_LIMIT} bytes limit`);
+        fs.unlink(filepath, () => {});
+      });
+      res.on('close', () => {
+        if (res.finished) return;
+        res.end('Connection failure');
+        fs.unlink(filepath, () => {});
       });
       break;
     default:
